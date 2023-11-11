@@ -43,7 +43,7 @@ This website is designed for the assessment of R programming skills, focusing on
 
 Data for this assessment is primarily sourced from:
 
-- Public datasets hosted on [GitHub](https://github.com/randrescastaneda/pub_data/raw/)
+- Public datasets hosted on [GitHub](https://github.com/randrescastaneda/pub_data/tree/master/data/Rtest1)
 
 ## Requirements
 
