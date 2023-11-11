@@ -30,52 +30,72 @@ setDT(wdi)
 ### 1. Summary statistics of GDP per capita by region
 
 ```{r}
+# Defining a function to calculate weighted standard deviation
 weighted_sd <- function(x, pop) {
+  # Calculating the weighted mean of the squared differences from the mean
+  # x: a numeric vector
+  # pop: weights for the elements in x
   sqrt(weighted.mean((x - weighted.mean(x, pop, na.rm = TRUE))^2, 
                      pop, na.rm = TRUE))
 }
-gdp_sum <- wdi[, .(
-  N = sum(!is.na(gdp)),
-  Mean = weighted_sd(gdp, pop),
-  SD = sqrt(weighted.mean((gdp - weighted.mean(gdp, pop, na.rm = TRUE))^2, 
-                          pop, na.rm = TRUE)),
-  Min = min(gdp, na.rm = TRUE),
-  Max = max(gdp, na.rm = TRUE)
-), by = .(region, date)]
 
+# Summarize GDP data with weighted standard deviation, min, max, and count of non-NA values
+gdp_sum <- wdi[, .(
+  N = sum(!is.na(gdp)),                    # Count of non-NA GDP values
+  Mean = weighted.mean(gdp, pop),         # Weighted mean of GDP
+        SD = weighted_sd(gdp, pop),       # Weighted standard deviation of GDP
+  Min = min(gdp, na.rm = TRUE),            # Minimum GDP value, excluding NAs
+  Max = max(gdp, na.rm = TRUE)             # Maximum GDP value, excluding NAs
+), by = .(region, date)]                   # Grouping by region and date
+
+# Order the resulting data table by region and date
 setorder(gdp_sum, region, date)
+
+# Rename the 'date' column to 'year'
 setnames(gdp_sum, "date", "year")
+
+# Load the reference dataset for comparison
 correct_q1 <- readr::read_rds(paste0(data_url, "wdi_summ_out.Rds"))
+
+# Compare the computed summary with the reference summary (commented out)
 # waldo::compare(correct_q1, gdp_sum)
+
+# Display the summarized data table
 datatable(gdp_sum, options = list(pageLength = 10))
+
 ```
 
 ### 2. Aggregate Stats
 
 ```{r}
+# Calculate aggregated statistics for life expectancy, GDP, and international poverty
 agg_stats <- wdi[, .(
-  mean_lifeex = weighted.mean(lifeex, pop, na.rm = TRUE),
-  sd_lifeex = weighted_sd(lifeex, pop),
-  min_lifeex = min(lifeex, na.rm = TRUE),
-  max_lifeex = max(lifeex, na.rm = TRUE),
-  median_lifeex = weighted.median(lifeex, pop, na.rm = TRUE),
-  mean_gdp = weighted.mean(gdp, pop, na.rm = TRUE),
-  sd_gdp = weighted_sd(gdp, pop),
-  min_gdp = min(gdp, na.rm = TRUE),
-  max_gdp = max(gdp, na.rm = TRUE),
-  median_gdp = weighted.median(gdp, pop, na.rm = TRUE),
-  mean_pov_intl = weighted.mean(pov_intl, pop, na.rm = TRUE),
-  sd_pov_intl = weighted_sd(pov_intl),
-  min_pov_intl = min(pov_intl, na.rm = TRUE),
-  max_pov_intl = max(pov_intl, na.rm = TRUE),
-  median_pov_intl = weighted.median(pov_intl, pop, na.rm = TRUE),
-  pop = sum(pop, na.rm = TRUE)
+  mean_lifeex = weighted.mean(lifeex, pop, na.rm = TRUE),     # Weighted mean of life expectancy
+  sd_lifeex = weighted_sd(lifeex, pop),                        # Weighted standard deviation of life expectancy
+  min_lifeex = min(lifeex, na.rm = TRUE),                      # Minimum life expectancy, excluding NAs
+  max_lifeex = max(lifeex, na.rm = TRUE),                      # Maximum life expectancy, excluding NAs
+  median_lifeex = weighted.median(lifeex, pop, na.rm = TRUE),  # Weighted median of life expectancy
+
+  mean_gdp = weighted.mean(gdp, pop, na.rm = TRUE),            # Weighted mean of GDP
+  sd_gdp = weighted_sd(gdp, pop),                              # Weighted standard deviation of GDP
+  min_gdp = min(gdp, na.rm = TRUE),                            # Minimum GDP value, excluding NAs
+  max_gdp = max(gdp, na.rm = TRUE),                            # Maximum GDP value, excluding NAs
+  median_gdp = weighted.median(gdp, pop, na.rm = TRUE),        # Weighted median of GDP
+
+  mean_pov_intl = weighted.mean(pov_intl, pop, na.rm = TRUE),  # Weighted mean of international poverty
+  sd_pov_intl = weighted_sd(pov_intl),                         # Weighted standard deviation of international poverty
+  min_pov_intl = min(pov_intl, na.rm = TRUE),                  # Minimum international poverty, excluding NAs
+  max_pov_intl = max(pov_intl, na.rm = TRUE),                  # Maximum international poverty, excluding NAs
+  median_pov_intl = weighted.median(pov_intl, pop, na.rm = TRUE), # Weighted median of international poverty
+
+  pop = sum(pop, na.rm = TRUE)                                 # Sum of population, excluding NAs
 ),
-by = .(region, date)
+by = .(region, date)                                           # Grouping by region and date
 ]
 
+# Reshape the data from wide to long format
 agg_stats <- melt(agg_stats,
-  id.vars = c("region", "date", "pop"),
+  id.vars = c("region", "date", "pop"),                        # Identifying variables
   measure.vars = list(
     c("mean_lifeex", "sd_lifeex", "min_lifeex", "max_lifeex", "median_lifeex"),
     c("mean_gdp", "sd_gdp", "min_gdp", "max_gdp", "median_gdp"),
@@ -85,76 +105,118 @@ agg_stats <- melt(agg_stats,
   variable.name = "estimate", value.name = c("lifeex", "gdp", "pov_intl")
 )
 
+# Convert 'estimate' column to a factor with meaningful labels
 agg_stats[, estimate := factor(estimate, labels = c("mean", "sd", "min", "max", 
                                                     "median"))]
+
+# Order the data table by estimate, region, and date
 setorder(agg_stats, estimate, region, date)
+
+# Reorder columns for better readability
 agg_stats <- agg_stats[, c(4, 1, 2, 3, 5, 6, 7)]
 
+# Load the reference dataset for comparison
 correct_q2 <- readr::read_rds(paste0(data_url, "wdi_agg_out.Rds"))
+
+# Compare the computed aggregate stats with the reference dataset (commented out)
 # waldo::compare(correct_q2, agg_stats)
 
+# Display the aggregated data 
 datatable(agg_stats, options = list(pageLength = 10))
 ```
 
 ### 3. Find outliers
 
 ```{r}
+# Defining a function to identify outlier columns in a data table
 is_outlier_cols <- function(dt, col) {
-  new_col_ll <- paste0("ll_", col)
-  new_col_hl <- paste0("hl_", col)
-  mean_col <- paste0("mean_", col)
-  sd_col <- paste0("sd_", col)
+  # Creating column names for lower and higher limits, mean and standard deviation
+  new_col_ll <- paste0("ll_", col)  # Lower limit column name
+  new_col_hl <- paste0("hl_", col)  # Higher limit column name
+  mean_col <- paste0("mean_", col)  # Mean column name
+  sd_col <- paste0("sd_", col)      # Standard deviation column name
+
+  # Find limit outliers
   dt[, (new_col_ll) := get(col) < get(mean_col) - 2.5 * get(sd_col), 
      by = 1:nrow(dt)]
+
+  # Find higher limit outliers
   dt[, (new_col_hl) := get(col) > get(mean_col) + 2.5 * get(sd_col), 
      by = 1:nrow(dt)]
 
   return(dt)
 }
 
+# Calculate mean and standard deviation for life expectancy, GDP, and Gini index
 temp_dt <- wdi[, .(
-  mean_lifeex = weighted.mean(lifeex, pop, na.rm = TRUE),
-  sd_lifeex = weighted_sd(lifeex, pop),
-  mean_gdp = weighted.mean(gdp, pop, na.rm = TRUE),
-  sd_gdp = weighted_sd(gdp, pop),
-  mean_gini = weighted.mean(gini, pop, na.rm = TRUE),
-  sd_gini = weighted_sd(gini, pop)
+  mean_lifeex = weighted.mean(lifeex, pop, na.rm = TRUE),  # Weighted Mean life expectancy
+  sd_lifeex = weighted_sd(lifeex, pop),                    # Weighted SD of life expectancy
+  mean_gdp = weighted.mean(gdp, pop, na.rm = TRUE),        # Weighted Mean GDP
+  sd_gdp = weighted_sd(gdp, pop),                          # Weighted SD of GDP
+  mean_gini = weighted.mean(gini, pop, na.rm = TRUE),      # Weighted Mean Gini index
+  sd_gini = weighted_sd(gini, pop)                         # Weighted SD of Gini index
 ), by = .(date)]
 
+# Merge the summary statistics with the original dataset (right join)
 outliers_dt <- merge(y = temp_dt, x = wdi, by = c("date"), all.x = TRUE)
+
+# Order the merged data table
 setorder(outliers_dt, iso3c, date, -region)
 
+# Apply the outlier detection function to specified columns
 for (col in c("lifeex", "gdp", "gini")) {
   outliers_dt <- is_outlier_cols(outliers_dt, col)
 }
 
+# Load the reference dataset for comparison
 correct_q3 <- readr::read_rds(paste0(data_url, "wdi_outliers_out.Rds"))
+
+# Reorder the columns to be the same as the reference dataset
 outliers_dt <- outliers_dt[, colnames(correct_q3), with = FALSE]
+
+# Compare the computed outlier data with a reference dataset (commented out)
 # waldo::compare(correct_q3, outliers_dt)
 
+# Display the outliers data 
 datatable(outliers_dt, options = list(pageLength = 10))
+
 ```
 
 ```{r}
+# Defining a function to create columns for lower and upper confidence intervals
 outlier_cols <- function(dt, col) {
-  new_col_ll <- paste0("lo_ci_", col)
-  new_col_hl <- paste0("hi_ci_", col)
-  mean_col <- paste0("mean_", col)
-  sd_col <- paste0("sd_", col)
+  # Creating new column names for lower and upper confidence intervals
+  new_col_ll <- paste0("lo_ci_", col)  # Lower confidence interval column name
+  new_col_hl <- paste0("hi_ci_", col)  # Upper confidence interval column name
+  mean_col <- paste0("mean_", col)     # Mean column name
+  sd_col <- paste0("sd_", col)         # Standard deviation column name
+
+  # Calculate lower confidence interval for each row
   dt[, (new_col_ll) := get(mean_col) - 2.5 * get(sd_col), by = 1:nrow(dt)]
+
+  # Calculate upper confidence interval for each row
   dt[, (new_col_hl) := get(mean_col) + 2.5 * get(sd_col), by = 1:nrow(dt)]
 
   return(dt)
 }
+
+# Apply the function to the 'lifeex' column of the 'outliers_dt' data table
+# and remove duplicate rows based on date and confidence interval columns
 outliers_dt_2 <- unique(outlier_cols(outliers_dt, "lifeex"), 
                         by = c("date", "lo_ci_lifeex", "hi_ci_lifeex"))
 
+# Create a plot using ggplot2
+# plotting points of original table containing data from all regions
 ggplot(data = outliers_dt, aes(x = date, y = lifeex)) +
+  # Add a ribbon to show confidence intervals using the table with unique values
   geom_ribbon(data = outliers_dt_2, aes(x = date, ymin = lo_ci_lifeex, 
                                         ymax = hi_ci_lifeex), alpha = 0.2) +
+  # Add points for each observation, colored by region
   geom_point(aes(color = region), size = 0.8) +
+  # Add a line to show the mean life expectancy over time
   geom_line(aes(x = date, y = mean_lifeex), color = "blue", linewidth = 0.2) +
   theme_minimal() +
+  # Customize the legend and plot theme
   theme(
     legend.position = c(0.5, 0.1),
     legend.justification = c(0.5, 0),
@@ -175,42 +237,60 @@ svy_sim <- readr::read_rds(paste0(data_url, "svy_sim_in1.Rds"))
 ### 4. Poverty measures
 
 ```{r}
+# Initialize an empty data table for poverty metrics with predefined columns
 cols <- c("year", "pov_line", "headcount", "povgap", "povseverity")
 pov_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
 setnames(pov_dt, cols)
 
+# Defining a function to calculate the Foster-Greer-Thorbecke (FGT) poverty measures
 FGT <- function(pov_line, year, dt) {
+  # Total population weight
   N <- sum(dt$weight)
+  # Calculate part of FGTi 
   dt[, `:=`(FGTi = (pov_line - income) / pov_line)]
+  # Subset data for those below the poverty line
   dt_subset <- dt[income <= pov_line]
+  # Calculate FGT indexes: headcount ratio, poverty gap, and severity of poverty
   FGT0 <- sum(dt_subset$weight * dt_subset$FGTi^0) / N
   FGT1 <- sum(dt_subset$weight * dt_subset$FGTi^1) / N
   FGT2 <- sum(dt_subset$weight * dt_subset$FGTi^2) / N
 
+  # Create a new data table with calculated values
   new_data <- data.table(year = year, pov_line = pov_line, headcount = FGT0, 
                          povgap = FGT1, povseverity = FGT2)
+  # Append new data to the pov_dt data table
   pov_dt <<- rbindlist(list(pov_dt, new_data), use.names = TRUE, fill = TRUE)
 }
 
+# Start year for the analysis
 year <- 2001
+# Loop through survey simulation datasets for each year
 for (dt in svy_sim) {
+  # Apply the FGT function for different poverty lines
   FGT(2.15, year, dt)
   FGT(3.65, year, dt)
   FGT(6.85, year, dt)
+  # Increment the year
   year <- year + 1
 }
 
+# Load the reference dataset for comparison
 correct_q4 <- readr::read_rds(paste0(data_url, "dt_pov_out.Rds"))
+# Compare the computed poverty data with the reference dataset (commented out)
 # waldo::compare(correct_q4, pov_dt)
+# Display the poverty data 
 datatable(pov_dt, options = list(pageLength = 10))
+
 ```
 
 ```{r}
+# Create a line plot using ggplot2 to visualize poverty metrics over years
 ggplot(data = pov_dt, aes(x = year, y = headcount, group = pov_line, 
                           color = as.factor(pov_line))) +
-  geom_line(linewidth = 0.5) +
-  geom_point(size = 0.8) +
-  theme_minimal() +
+  geom_line(linewidth = 0.5) +  # Line for each poverty line
+  geom_point(size = 0.8) +      # Points for each year and poverty line
+  theme_minimal() +           
+  # Customizing the legend and plot appearance
   theme(
     legend.position = "bottom",
     legend.direction = "horizontal",
@@ -223,45 +303,59 @@ ggplot(data = pov_dt, aes(x = year, y = headcount, group = pov_line,
 ### 5. Lorenz curve
 
 ```{r}
+# Initialize an empty data table for Lorenz curve data with specified columns
 cols <- c("welfare", "cum_welfare", "cum_population", "year", "bin")
 lorenz_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
 setnames(lorenz_dt, cols)
 
+# Defining a function to calculate and store Lorenz curve data
 Lorenz <- function(dt, year) {
+  # Sort the data table by income
   dt <- dt[order(dt$income), ]
+  # Calculate cumulative population and welfare (income) shares
   dt$cum_pop <- cumsum(dt$weight) / sum(dt$weight)
   dt$cum_welfare <- cumsum(dt$weight * dt$income) / sum(dt$weight * dt$income)
   dt$welfare <- cumsum(dt$weight * dt$income)
 
-
+  # Interpolate to get a smooth Lorenz curve with 100 points
   approx_points <- approx(dt$cum_pop, dt$cum_welfare, n = 100)
+  # Map each interpolated population share to an income value
   income_val <- sapply(approx_points$x, function(x) {
     idx <- which.min(abs(dt$cum_pop - x))
     return(dt$income[idx])
   })
 
+  # Create a new data frame with interpolated Lorenz curve data
   new_data <- data.frame(welfare = income_val, cum_welfare = approx_points$y, 
-                    cum_population = approx_points$x, year = year, bin = 1:100)
+                         cum_population = approx_points$x, year = year, bin = 1:100)
+  # Append the new data to the global Lorenz curve data table
   lorenz_dt <<- rbindlist(list(lorenz_dt, new_data), use.names = TRUE, 
                           fill = TRUE)
 }
 
+# Initialize the starting year for analysis
 year <- 2001
+# Loop through survey simulation datasets for each year
 for (dt in svy_sim) {
   Lorenz(dt, year)
   year <- year + 1
 }
 
+# Load the reference dataset for comparison
 correct_q5 <- readr::read_rds(paste0(data_url, "dt_lorenz_out.Rds"))
+# Compare the computed Lorenz curve data with the reference dataset (commented out)
 # waldo::compare(correct_q4, pov_dt)
+# Display the Lorenz curve data 
 datatable(lorenz_dt, options = list(pageLength = 10))
 ```
 
 ```{r}
+# Create a line plot using ggplot2 to visualize Lorenz curves over years
 ggplot(data = lorenz_dt, aes(x = cum_population, y = cum_welfare, group = year, 
                              color = as.factor(year))) +
-  geom_line(linewidth = 0.4) +
-  theme_minimal() +
+  geom_line(linewidth = 0.4) +  # Line for each year
+  theme_minimal() +             
+  # Customize the legend and plot appearance
   theme(
     legend.position = c(0.1, 0.2),
     legend.justification = c(0.5, 0),
@@ -275,40 +369,55 @@ ggplot(data = lorenz_dt, aes(x = cum_population, y = cum_welfare, group = year,
 ### 6. Gini coefficient
 
 ```{r}
+# Initialize an empty data table for storing Gini coefficient data
 cols <- c("year", "gini")
 gini_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
 setnames(gini_dt, cols)
 
+# Defining a function to calculate the Gini coefficient
 Gini <- function(dt, years) {
+  # Filter data for the specific year
   dt <- dt[year == years]
+  # Order the data table by 'bin'
   setorder(dt, bin)
+  # Initialize area accumulator
   A <- 0
+  # Loop to calculate the area under the Lorenz curve
   for (i in 2:length(dt$cum_pop)) {
-    width <- dt$cum_pop[i] - dt$cum_pop[i - 1]
-    height_avg <- (dt$cum_welfare[i] + dt$cum_welfare[i - 1]) / 2
-    A <- A + (width * height_avg)
+    width <- dt$cum_pop[i] - dt$cum_pop[i - 1]  # Width of the segment
+    height_avg <- (dt$cum_welfare[i] + dt$cum_welfare[i - 1]) / 2  # Average height of the segment
+    A <- A + (width * height_avg)  # Accumulate area
   }
 
-
+  # Calculate Gini index
   gini_index <- 1 - 2 * A
+  # Create a new data frame with the calculated Gini index
   new_data <- data.frame(year = years, gini = gini_index)
+  # Append the new data to the global Gini data table
   gini_dt <<- rbindlist(list(gini_dt, new_data), use.names = TRUE, fill = TRUE)
 }
 
+# Initialize the starting year for analysis
 year <- 2001
+# Loop to calculate Gini coefficient for multiple years
 for (i in 1:10) {
   Gini(lorenz_dt, year)
   year <- year + 1
 }
 
+# Load the reference dataset for comparison
 correct_q6 <- readr::read_rds(paste0(data_url, "dt_gini_out.Rds"))
+# Compare the computed Gini data with the reference dataset (commented out)
 # waldo::compare(correct_q6, gini_dt)
+# Display the Gini data
 datatable(gini_dt, options = list(pageLength = 10))
+
 ```
 
 ```{r}
+# Create a line plot using ggplot2 to visualize the Gini coefficient over years
 ggplot(data = gini_dt, aes(x = year, y = gini)) +
-  geom_line(linewidth = 0.4) +
-  geom_point(size = 0.8) +
+  geom_line(linewidth = 0.4) +  # Line showing the trend of the Gini coefficient
+  geom_point(size = 0.8) +      # Points for each year
   theme_minimal()
 ```
