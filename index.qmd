@@ -1,0 +1,311 @@
+---
+title: "R skills assessment"
+subtitle: "GPID Team, The World Bank"
+author: "Joseph Zahar"
+format: 
+  html: default
+  pdf: default
+editor: visual
+---
+
+## Basic Stats
+
+```{r, include=FALSE}
+# Load main packages
+library(readr)
+library(dplyr)
+library(waldo)
+library(data.table)
+library(spatstat)
+library(ggplot2)
+library(DT)
+
+# Loading the dataset for the next 3 questions
+tag <- "202311081903"
+base_url <- "https://github.com/randrescastaneda/pub_data/raw/"
+data_url <- paste0(base_url, tag, "/data/Rtest1/")
+
+wdi <- readr::read_rds(paste0(data_url, "wdi_in1.Rds"))
+setDT(wdi)
+```
+
+### 1. Summary statistics of GDP per capita by region
+
+```{r}
+weighted_sd <- function(x, pop) {
+  sqrt(weighted.mean((x - weighted.mean(x, pop, na.rm = TRUE))^2, 
+                     pop, na.rm = TRUE))
+}
+gdp_sum <- wdi[, .(
+  N = sum(!is.na(gdp)),
+  Mean = weighted_sd(gdp, pop),
+  SD = sqrt(weighted.mean((gdp - weighted.mean(gdp, pop, na.rm = TRUE))^2, 
+                          pop, na.rm = TRUE)),
+  Min = min(gdp, na.rm = TRUE),
+  Max = max(gdp, na.rm = TRUE)
+), by = .(region, date)]
+
+setorder(gdp_sum, region, date)
+setnames(gdp_sum, "date", "year")
+correct_q1 <- readr::read_rds(paste0(data_url, "wdi_summ_out.Rds"))
+# waldo::compare(correct_q1, gdp_sum)
+datatable(gdp_sum, options = list(pageLength = 10))
+```
+
+### 2. Aggregate Stats
+
+```{r}
+agg_stats <- wdi[, .(
+  mean_lifeex = weighted.mean(lifeex, pop, na.rm = TRUE),
+  sd_lifeex = weighted_sd(lifeex, pop),
+  min_lifeex = min(lifeex, na.rm = TRUE),
+  max_lifeex = max(lifeex, na.rm = TRUE),
+  median_lifeex = weighted.median(lifeex, pop, na.rm = TRUE),
+  mean_gdp = weighted.mean(gdp, pop, na.rm = TRUE),
+  sd_gdp = weighted_sd(gdp, pop),
+  min_gdp = min(gdp, na.rm = TRUE),
+  max_gdp = max(gdp, na.rm = TRUE),
+  median_gdp = weighted.median(gdp, pop, na.rm = TRUE),
+  mean_pov_intl = weighted.mean(pov_intl, pop, na.rm = TRUE),
+  sd_pov_intl = weighted_sd(pov_intl),
+  min_pov_intl = min(pov_intl, na.rm = TRUE),
+  max_pov_intl = max(pov_intl, na.rm = TRUE),
+  median_pov_intl = weighted.median(pov_intl, pop, na.rm = TRUE),
+  pop = sum(pop, na.rm = TRUE)
+),
+by = .(region, date)
+]
+
+agg_stats <- melt(agg_stats,
+  id.vars = c("region", "date", "pop"),
+  measure.vars = list(
+    c("mean_lifeex", "sd_lifeex", "min_lifeex", "max_lifeex", "median_lifeex"),
+    c("mean_gdp", "sd_gdp", "min_gdp", "max_gdp", "median_gdp"),
+    c("mean_pov_intl", "sd_pov_intl", "min_pov_intl", "max_pov_intl", 
+      "median_pov_intl")
+  ),
+  variable.name = "estimate", value.name = c("lifeex", "gdp", "pov_intl")
+)
+
+agg_stats[, estimate := factor(estimate, labels = c("mean", "sd", "min", "max", 
+                                                    "median"))]
+setorder(agg_stats, estimate, region, date)
+agg_stats <- agg_stats[, c(4, 1, 2, 3, 5, 6, 7)]
+
+correct_q2 <- readr::read_rds(paste0(data_url, "wdi_agg_out.Rds"))
+# waldo::compare(correct_q2, agg_stats)
+
+datatable(agg_stats, options = list(pageLength = 10))
+```
+
+### 3. Find outliers
+
+```{r}
+is_outlier_cols <- function(dt, col) {
+  new_col_ll <- paste0("ll_", col)
+  new_col_hl <- paste0("hl_", col)
+  mean_col <- paste0("mean_", col)
+  sd_col <- paste0("sd_", col)
+  dt[, (new_col_ll) := get(col) < get(mean_col) - 2.5 * get(sd_col), 
+     by = 1:nrow(dt)]
+  dt[, (new_col_hl) := get(col) > get(mean_col) + 2.5 * get(sd_col), 
+     by = 1:nrow(dt)]
+
+  return(dt)
+}
+
+temp_dt <- wdi[, .(
+  mean_lifeex = weighted.mean(lifeex, pop, na.rm = TRUE),
+  sd_lifeex = weighted_sd(lifeex, pop),
+  mean_gdp = weighted.mean(gdp, pop, na.rm = TRUE),
+  sd_gdp = weighted_sd(gdp, pop),
+  mean_gini = weighted.mean(gini, pop, na.rm = TRUE),
+  sd_gini = weighted_sd(gini, pop)
+), by = .(date)]
+
+outliers_dt <- merge(y = temp_dt, x = wdi, by = c("date"), all.x = TRUE)
+setorder(outliers_dt, iso3c, date, -region)
+
+for (col in c("lifeex", "gdp", "gini")) {
+  outliers_dt <- is_outlier_cols(outliers_dt, col)
+}
+
+correct_q3 <- readr::read_rds(paste0(data_url, "wdi_outliers_out.Rds"))
+outliers_dt <- outliers_dt[, colnames(correct_q3), with = FALSE]
+# waldo::compare(correct_q3, outliers_dt)
+
+datatable(outliers_dt, options = list(pageLength = 10))
+```
+
+
+```{r}
+outlier_cols <- function(dt, col) {
+  new_col_ll <- paste0("lo_ci_", col)
+  new_col_hl <- paste0("hi_ci_", col)
+  mean_col <- paste0("mean_", col)
+  sd_col <- paste0("sd_", col)
+  dt[, (new_col_ll) := get(mean_col) - 2.5 * get(sd_col), by = 1:nrow(dt)]
+  dt[, (new_col_hl) := get(mean_col) + 2.5 * get(sd_col), by = 1:nrow(dt)]
+
+  return(dt)
+}
+outliers_dt_2 <- unique(outlier_cols(outliers_dt, "lifeex"), 
+                        by = c("date", "lo_ci_lifeex", "hi_ci_lifeex"))
+
+ggplot(data = outliers_dt, aes(x = date, y = lifeex)) +
+  geom_ribbon(data = outliers_dt_2, aes(x = date, ymin = lo_ci_lifeex, 
+                                        ymax = hi_ci_lifeex), alpha = 0.2) +
+  geom_point(aes(color = region), size = 0.8) +
+  geom_line(aes(x = date, y = mean_lifeex), color = "blue", linewidth = 0.2) +
+  theme_minimal() +
+  theme(
+    legend.position = c(0.5, 0.1),
+    legend.justification = c(0.5, 0),
+    legend.direction = "horizontal",
+    legend.title = element_blank(),
+    legend.background = element_blank(),
+    legend.box.background = element_blank()
+  )
+```
+## Simulated data
+```{r, include=FALSE}
+# Loading dataset for the next 3 questions
+svy_sim <- readr::read_rds(paste0(data_url, "svy_sim_in1.Rds"))
+```
+
+### 4. Poverty measures
+```{r}
+cols <- c("year", "pov_line", "headcount", "povgap", "povseverity")
+pov_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
+setnames(pov_dt, cols)
+
+FGT <- function(pov_line, year, dt) {
+  N <- sum(dt$weight)
+  dt[, `:=`(FGTi = (pov_line - income) / pov_line)]
+  dt_subset <- dt[income <= pov_line]
+  FGT0 <- sum(dt_subset$weight * dt_subset$FGTi^0) / N
+  FGT1 <- sum(dt_subset$weight * dt_subset$FGTi^1) / N
+  FGT2 <- sum(dt_subset$weight * dt_subset$FGTi^2) / N
+
+  new_data <- data.table(year = year, pov_line = pov_line, headcount = FGT0, 
+                         povgap = FGT1, povseverity = FGT2)
+  pov_dt <<- rbindlist(list(pov_dt, new_data), use.names = TRUE, fill = TRUE)
+}
+
+year <- 2001
+for (dt in svy_sim) {
+  FGT(2.15, year, dt)
+  FGT(3.65, year, dt)
+  FGT(6.85, year, dt)
+  year <- year + 1
+}
+
+correct_q4 <- readr::read_rds(paste0(data_url, "dt_pov_out.Rds"))
+# waldo::compare(correct_q4, pov_dt)
+# datatable(pov_dt, options = list(pageLength = 10))
+pov_dt
+```
+```{r}
+ggplot(data = pov_dt, aes(x = year, y = headcount, group = pov_line, 
+                          color = as.factor(pov_line))) +
+  geom_line(linewidth = 0.5) +
+  geom_point(size = 0.8) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.title = element_blank(),
+    legend.background = element_blank(),
+    legend.box.background = element_blank()
+  )
+```
+### 5. Lorenz curve
+```{r}
+cols <- c("welfare", "cum_welfare", "cum_population", "year", "bin")
+lorenz_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
+setnames(lorenz_dt, cols)
+
+Lorenz <- function(dt, year) {
+  dt <- dt[order(dt$income), ]
+  dt$cum_pop <- cumsum(dt$weight) / sum(dt$weight)
+  dt$cum_welfare <- cumsum(dt$weight * dt$income) / sum(dt$weight * dt$income)
+  dt$welfare <- cumsum(dt$weight * dt$income)
+
+
+  approx_points <- approx(dt$cum_pop, dt$cum_welfare, n = 100)
+  income_val <- sapply(approx_points$x, function(x) {
+    idx <- which.min(abs(dt$cum_pop - x))
+    return(dt$income[idx])
+  })
+
+  new_data <- data.frame(welfare = income_val, cum_welfare = approx_points$y, 
+                    cum_population = approx_points$x, year = year, bin = 1:100)
+  lorenz_dt <<- rbindlist(list(lorenz_dt, new_data), use.names = TRUE, 
+                          fill = TRUE)
+}
+
+year <- 2001
+for (dt in svy_sim) {
+  Lorenz(dt, year)
+  year <- year + 1
+}
+
+correct_q5 <- readr::read_rds(paste0(data_url, "dt_lorenz_out.Rds"))
+# waldo::compare(correct_q4, pov_dt)
+datatable(lorenz_dt, options = list(pageLength = 10))
+```
+
+```{r}
+ggplot(data = lorenz_dt, aes(x = cum_population, y = cum_welfare, group = year, 
+                             color = as.factor(year))) +
+  geom_line(linewidth = 0.4) +
+  theme_minimal() +
+  theme(
+    legend.position = c(0.1, 0.2),
+    legend.justification = c(0.5, 0),
+    legend.direction = "vertical",
+    legend.title = element_blank(),
+    legend.background = element_blank(),
+    legend.box.background = element_blank()
+  )
+```
+
+### 6. Gini coefficient
+```{r}
+cols <- c("year", "gini")
+gini_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
+setnames(gini_dt, cols)
+
+Gini <- function(dt, years) {
+  dt <- dt[year == years]
+  setorder(dt, bin)
+  A <- 0
+  for (i in 2:length(dt$cum_pop)) {
+    width <- dt$cum_pop[i] - dt$cum_pop[i - 1]
+    height_avg <- (dt$cum_welfare[i] + dt$cum_welfare[i - 1]) / 2
+    A <- A + (width * height_avg)
+  }
+
+
+  gini_index <- 1 - 2 * A
+  new_data <- data.frame(year = years, gini = gini_index)
+  gini_dt <<- rbindlist(list(gini_dt, new_data), use.names = TRUE, fill = TRUE)
+}
+
+year <- 2001
+for (i in 1:10) {
+  Gini(lorenz_dt, year)
+  year <- year + 1
+}
+
+correct_q6 <- readr::read_rds(paste0(data_url, "dt_gini_out.Rds"))
+# waldo::compare(correct_q6, gini_dt)
+datatable(gini_dt, options = list(pageLength = 10))
+```
+```{r}
+ggplot(data = gini_dt, aes(x = year, y = gini)) +
+  geom_line(linewidth = 0.4) +
+  geom_point(size = 0.8) +
+  theme_minimal()
+```
+
