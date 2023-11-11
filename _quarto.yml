@@ -1,0 +1,20 @@
+project:
+  type: website
+
+website:
+  title: "R skills assessment"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Submission
+      - href: dash.qmd
+        text: Previous Work
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+  pdf: default
+  
+editor: visual

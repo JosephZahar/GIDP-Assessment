@@ -2,11 +2,9 @@
 title: "R skills assessment"
 subtitle: "GPID Team, The World Bank"
 author: "Joseph Zahar"
-format: 
-  html: default
-  pdf: default
-editor: visual
 ---
+
+![](jzhs.jpg){.sidebar-image} 
 
 ## Basic Stats
 
@@ -137,7 +135,6 @@ outliers_dt <- outliers_dt[, colnames(correct_q3), with = FALSE]
 datatable(outliers_dt, options = list(pageLength = 10))
 ```
 
-
 ```{r}
 outlier_cols <- function(dt, col) {
   new_col_ll <- paste0("lo_ci_", col)
@@ -167,13 +164,16 @@ ggplot(data = outliers_dt, aes(x = date, y = lifeex)) +
     legend.box.background = element_blank()
   )
 ```
+
 ## Simulated data
+
 ```{r, include=FALSE}
 # Loading dataset for the next 3 questions
 svy_sim <- readr::read_rds(paste0(data_url, "svy_sim_in1.Rds"))
 ```
 
 ### 4. Poverty measures
+
 ```{r}
 cols <- c("year", "pov_line", "headcount", "povgap", "povseverity")
 pov_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
@@ -202,9 +202,9 @@ for (dt in svy_sim) {
 
 correct_q4 <- readr::read_rds(paste0(data_url, "dt_pov_out.Rds"))
 # waldo::compare(correct_q4, pov_dt)
-# datatable(pov_dt, options = list(pageLength = 10))
-pov_dt
+datatable(pov_dt, options = list(pageLength = 10))
 ```
+
 ```{r}
 ggplot(data = pov_dt, aes(x = year, y = headcount, group = pov_line, 
                           color = as.factor(pov_line))) +
@@ -219,7 +219,9 @@ ggplot(data = pov_dt, aes(x = year, y = headcount, group = pov_line,
     legend.box.background = element_blank()
   )
 ```
+
 ### 5. Lorenz curve
+
 ```{r}
 cols <- c("welfare", "cum_welfare", "cum_population", "year", "bin")
 lorenz_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
@@ -271,6 +273,7 @@ ggplot(data = lorenz_dt, aes(x = cum_population, y = cum_welfare, group = year,
 ```
 
 ### 6. Gini coefficient
+
 ```{r}
 cols <- c("year", "gini")
 gini_dt <- data.table(matrix(ncol = length(cols), nrow = 0))
@@ -302,10 +305,10 @@ correct_q6 <- readr::read_rds(paste0(data_url, "dt_gini_out.Rds"))
 # waldo::compare(correct_q6, gini_dt)
 datatable(gini_dt, options = list(pageLength = 10))
 ```
+
 ```{r}
 ggplot(data = gini_dt, aes(x = year, y = gini)) +
   geom_line(linewidth = 0.4) +
   geom_point(size = 0.8) +
   theme_minimal()
 ```
-
